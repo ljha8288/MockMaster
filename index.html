@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MockMaster - Ultimate Mock Analysis Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    .active-nav { background-color: #eff6ff; color: #2563eb; font-weight: 600; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased font-sans">
+
+  <div id="authModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl border border-slate-100">
+      <div class="flex items-center gap-2 mb-2">
+        <div class="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-xl">M</div>
+        <h2 class="text-2xl font-black text-slate-900 tracking-tight">MockMaster</h2>
+      </div>
+      <p class="text-sm text-slate-500 mb-6">Apne email se login ya sign up karein (Free Access)</p>
+
+      <form id="authForm" onsubmit="handleAuth(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Email Address</label>
+          <input type="email" id="authEmail" required placeholder="name@example.com" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Password</label>
+          <input type="password" id="authPassword" required placeholder="••••••••" class="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600" />
+        </div>
+        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition text-sm shadow-md shadow-blue-500/20">
+          Continue to Dashboard
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="flex min-h-screen">
+    
+    <aside class="w-64 bg-white border-r border-slate-200 flex flex-col justify-between p-5 sticky top-0 h-screen">
+      <div>
+        <div class="flex items-center gap-3 pb-6 border-b border-slate-100">
+          <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black text-lg">M</div>
+          <span class="text-xl font-extrabold tracking-tight text-slate-900">MockMaster</span>
+        </div>
+
+        <div class="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-between">
+          <div>
+            <span class="text-[10px] uppercase font-bold text-blue-600 block">Current Plan</span>
+            <span id="tierBadge" class="text-xs font-bold text-blue-900">Free Access Pass</span>
+          </div>
+          <button onclick="toggleSubscriptionModal()" class="text-xs bg-blue-600 text-white px-2.5 py-1 rounded-lg font-medium hover:bg-blue-700">
+            Pro Plan
+          </button>
+        </div>
+
+        <nav class="mt-6 space-y-1.5">
+          <button onclick="switchTab('dashboard')" id="nav-dashboard" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm transition active-nav">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard
+          </button>
+          <button onclick="switchTab('logMock')" id="nav-logMock" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm transition text-slate-600 hover:bg-slate-50">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i> Log a Mock
+          </button>
+          <button onclick="switchTab('weakTopics')" id="nav-weakTopics" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm transition text-slate-600 hover:bg-slate-50">
+            <i data-lucide="target" class="w-4 h-4"></i> Weak Topics & Radar
+          </button>
+        </nav>
+      </div>
+
+      <div class="border-t border-slate-100 pt-4 flex items-center justify-between">
+        <div class="truncate mr-2">
+          <p id="userEmailDisplay" class="text-xs font-bold text-slate-800 truncate">user@mockmaster.com</p>
+          <p class="text-[10px] text-slate-400">Logged in</p>
+        </div>
+        <button onclick="logout()" title="Logout" class="text-slate-400 hover:text-rose-600 p-1.5">
+          <i data-lucide="log-out" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </aside>
+
+    <main class="flex-1 p-8 overflow-y-auto max-w-7xl mx-auto">
+      
+      <div id="view-dashboard" class="space-y-6">
+        <div>
+          <h1 class="text-2xl font-black text-slate-900">Mock Performance Analytics</h1>
+          <p class="text-sm text-slate-500">Track your exam readiness and error momentum</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-bold text-slate-400 uppercase">OFM Index</span>
+            <p class="text-3xl font-extrabold text-blue-600 mt-1">78 <span class="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">Good</span></p>
+            <p class="text-[11px] text-slate-400 mt-1">Predicted Exam Readiness</p>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-bold text-slate-400 uppercase">Mocks Logged</span>
+            <p id="totalMocksCount" class="text-3xl font-extrabold text-slate-900 mt-1">1</p>
+            <p class="text-[11px] text-slate-400 mt-1">Full-length tests analyzed</p>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-bold text-slate-400 uppercase">Avg Score</span>
+            <p id="avgScoreDisplay" class="text-3xl font-extrabold text-slate-900 mt-1">162.4</p>
+            <p class="text-[11px] text-slate-400 mt-1">Out of 200 Marks</p>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <span class="text-xs font-bold text-slate-400 uppercase">Avg Accuracy</span>
+            <p class="text-3xl font-extrabold text-emerald-600 mt-1">86.5%</p>
+            <p class="text-[11px] text-slate-400 mt-1">Standard target: 85%+</p>
+          </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <h2 class="text-base font-bold text-slate-900 mb-4">Subject-wise Performance</h2>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-100 text-center">
+              <p class="text-xs font-bold text-slate-500">Reasoning Ability</p>
+              <p class="text-2xl font-black text-emerald-600 mt-1">86.5%</p>
+              <span class="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-bold">Strong</span>
+            </div>
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-100 text-center">
+              <p class="text-xs font-bold text-slate-500">General Awareness</p>
+              <p class="text-2xl font-black text-blue-600 mt-1">63.1%</p>
+              <span class="text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-bold">Average</span>
+            </div>
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-100 text-center">
+              <p class="text-xs font-bold text-slate-500">Quantitative Aptitude</p>
+              <p class="text-2xl font-black text-amber-600 mt-1">86.1%</p>
+              <span class="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-bold">Strong</span>
+            </div>
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-100 text-center">
+              <p class="text-xs font-bold text-slate-500">English Language</p>
+              <p class="text-2xl font-black text-purple-600 mt-1">89.1%</p>
+              <span class="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-bold">Mastered</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="view-logMock" class="hidden space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl font-black text-slate-900">Log New Mock Test</h1>
+            <p class="text-sm text-slate-500">Enter questions, wrong attempts and revision takeaways</p>
+          </div>
+          <button onclick="saveMock()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition flex items-center gap-2">
+            <i data-lucide="check" class="w-4 h-4"></i> Save Full Mock
+          </button>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="text-xs font-bold text-slate-600 uppercase">Mock Title</label>
+            <input id="mockTitleInput" value="SSC CGL Tier 1 Mock 01" class="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </div>
+          <div>
+            <label class="text-xs font-bold text-slate-600 uppercase">Total Score Scored</label>
+            <input type="number" id="mockScoreInput" value="152" class="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600" />
+          </div>
+          <div>
+            <label class="text-xs font-bold text-slate-600 uppercase">Target Exam</label>
+            <select class="w-full mt-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
+              <option>SSC CGL Tier 1</option>
+              <option>SSC CHSL</option>
+              <option>SSC CPO</option>
+              <option>Railway NTPC</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="space-y-4" id="questionsContainer">
+          </div>
+
+        <button onclick="addQuestionCard()" class="w-full py-3 border-2 border-dashed border-slate-300 rounded-2xl text-slate-600 font-bold text-sm hover:border-blue-600 hover:text-blue-600 hover:bg-blue-50/50 transition flex items-center justify-center gap-2">
+          <i data-lucide="plus" class="w-4 h-4"></i> Add Another Question Entry
+        </button>
+      </div>
+
+      <div id="view-weakTopics" class="hidden space-y-6">
+        <div>
+          <h1 class="text-2xl font-black text-slate-900">Weak Topics & Mastery Radar</h1>
+          <p class="text-sm text-slate-500">Traffic Light Performance Zones based on your logged mistakes</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="bg-rose-50 border border-rose-200 rounded-2xl p-5">
+            <h2 class="text-base font-bold text-rose-800 flex items-center gap-2 mb-3">
+              <i data-lucide="alert-octagon" class="w-5 h-5"></i> Red Zone (&lt; 50% Acc)
+            </h2>
+            <div class="space-y-3" id="redZoneList">
+              <div class="bg-white p-3.5 rounded-xl border border-rose-100 shadow-sm flex justify-between items-center">
+                <div>
+                  <p class="text-sm font-bold text-slate-800">Numbers & Divisibility</p>
+                  <p class="text-xs text-rose-600 font-medium">Quantitative Aptitude</p>
+                </div>
+                <span class="text-xs font-extrabold bg-rose-100 text-rose-700 px-2 py-1 rounded-md">32%</span>
+              </div>
+              <div class="bg-white p-3.5 rounded-xl border border-rose-100 shadow-sm flex justify-between items-center">
+                <div>
+                  <p class="text-sm font-bold text-slate-800">Profit & Loss Discount</p>
+                  <p class="text-xs text-rose-600 font-medium">Quantitative Aptitude</p>
+                </div>
+                <span class="text-xs font-extrabold bg-rose-100 text-rose-700 px-2 py-1 rounded-md">40%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+            <h2 class="text-base font-bold text-amber-800 flex items-center gap-2 mb-3">
+              <i data-lucide="alert-triangle" class="w-5 h-5"></i> Yellow Zone (50% - 80%)
+            </h2>
+            <div class="space-y-3">
+              <div class="bg-white p-3.5 rounded-xl border border-amber-100 shadow-sm flex justify-between items-center">
+                <div>
+                  <p class="text-sm font-bold text-slate-800">Synonyms & Antonyms</p>
+                  <p class="text-xs text-amber-600 font-medium">English Language</p>
+                </div>
+                <span class="text-xs font-extrabold bg-amber-100 text-amber-700 px-2 py-1 rounded-md">67%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-5">
+            <h2 class="text-base font-bold text-emerald-800 flex items-center gap-2 mb-3">
+              <i data-lucide="check-circle-2" class="w-5 h-5"></i> Green Zone (&gt; 80% Acc)
+            </h2>
+            <div class="space-y-3">
+              <div class="bg-white p-3.5 rounded-xl border border-emerald-100 shadow-sm flex justify-between items-center">
+                <div>
+                  <p class="text-sm font-bold text-slate-800">Analogy & Classification</p>
+                  <p class="text-xs text-emerald-600 font-medium">Reasoning Ability</p>
+                </div>
+                <span class="text-xs font-extrabold bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md">92%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <div id="subModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-8 text-center shadow-2xl border border-slate-100">
+      <div class="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-4 font-bold text-xl">
+        ★
+      </div>
+      <h3 class="text-2xl font-black text-slate-900">Upgrade to MockMaster Pro</h3>
+      <p class="text-sm text-slate-500 mt-2">Abhi sabhi features sabhi users ke liye 100% Free hain! Baad mein yahan subscription plan trigger hoga.</p>
+      
+      <div class="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-200 text-left space-y-2 text-xs font-medium text-slate-600">
+        <p class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-600"></i> AI Question Error Auto-detection</p>
+        <p class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-600"></i> Unlimited Mocks & Custom Retests</p>
+        <p class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-emerald-600"></i> Detailed Topic Mastery Zones</p>
+      </div>
+
+      <button onclick="toggleSubscriptionModal()" class="mt-6 w-full bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-slate-800 transition text-sm">
+        Close / Continue Free
+      </button>
+    </div>
+  </div>
+
+  <script>
+    let questionsList = [
+      { qNo: 1, section: 'Reasoning Ability', chapter: 'Analogy', status: 'Wrong', mistake: 'Calculation', note: 'Formula yaad rakhna hai' }
+    ];
+
+    function init() {
+      lucide.createIcons();
+      renderQuestions();
+      const savedUser = localStorage.getItem('mm_user');
+      if (savedUser) {
+        document.getElementById('authModal').classList.add('hidden');
+        document.getElementById('userEmailDisplay').innerText = savedUser;
+      }
+    }
+
+    function handleAuth(e) {
+      e.preventDefault();
+      const email = document.getElementById('authEmail').value;
+      localStorage.setItem('mm_user', email);
+      document.getElementById('authModal').classList.add('hidden');
+      document.getElementById('userEmailDisplay').innerText = email;
+    }
+
+    function logout() {
+      localStorage.removeItem('mm_user');
+      location.reload();
+    }
+
+    function switchTab(tabId) {
+      ['dashboard', 'logMock', 'weakTopics'].forEach(t => {
+        document.getElementById('view-' + t).classList.add('hidden');
+        document.getElementById('nav-' + t).classList.remove('active-nav');
+        document.getElementById('nav-' + t).classList.add('text-slate-600');
+      });
+      document.getElementById('view-' + tabId).classList.remove('hidden');
+      document.getElementById('nav-' + tabId).classList.add('active-nav');
+      document.getElementById('nav-' + tabId).classList.remove('text-slate-600');
+      lucide.createIcons();
+    }
+
+    function renderQuestions() {
+      const container = document.getElementById('questionsContainer');
+      container.innerHTML = '';
+      questionsList.forEach((q, idx) => {
+        container.innerHTML += `
+          <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+              <span class="font-bold text-xs bg-slate-100 text-slate-700 px-3 py-1 rounded-md">Question #${idx + 1}</span>
+              <button onclick="removeQuestion(${idx})" class="text-slate-400 hover:text-rose-600 text-xs font-bold">Remove</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div>
+                <label class="text-[11px] font-bold text-slate-500 uppercase">Section</label>
+                <select class="w-full mt-1 border border-slate-200 rounded-lg p-2 text-xs bg-slate-50">
+                  <option ${q.section === 'Reasoning Ability' ? 'selected' : ''}>Reasoning Ability</option>
+                  <option ${q.section === 'Quantitative Aptitude' ? 'selected' : ''}>Quantitative Aptitude</option>
+                  <option ${q.section === 'English Language' ? 'selected' : ''}>English Language</option>
+                  <option ${q.section === 'General Awareness' ? 'selected' : ''}>General Awareness</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-[11px] font-bold text-slate-500 uppercase">Chapter Name</label>
+                <input value="${q.chapter}" placeholder="e.g. Analogy" class="w-full mt-1 border border-slate-200 rounded-lg p-2 text-xs bg-slate-50" />
+              </div>
+              <div>
+                <label class="text-[11px] font-bold text-slate-500 uppercase">Status</label>
+                <select class="w-full mt-1 border border-slate-200 rounded-lg p-2 text-xs bg-slate-50">
+                  <option value="Wrong">Wrong (Incorrect)</option>
+                  <option value="Skipped">Skipped</option>
+                  <option value="Correct">Correct</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-[11px] font-bold text-slate-500 uppercase">Mistake Reason</label>
+                <select class="w-full mt-1 border border-slate-200 rounded-lg p-2 text-xs bg-slate-50">
+                  <option>Calculation Error</option>
+                  <option>Concept Missing</option>
+                  <option>Silly Mistake</option>
+                  <option>Time Rush</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="text-[11px] font-bold text-slate-500 uppercase">Learning Note (Key Formula / Takeaway)</label>
+              <input value="${q.note}" placeholder="Is question se kya sikhne ko mila..." class="w-full mt-1 border border-slate-200 rounded-lg p-2 text-xs bg-slate-50" />
+            </div>
+          </div>
+        `;
+      });
+      lucide.createIcons();
+    }
+
+    function addQuestionCard() {
+      questionsList.push({ qNo: questionsList.length + 1, section: 'Quantitative Aptitude', chapter: '', status: 'Wrong', mistake: 'Concept Missing', note: '' });
+      renderQuestions();
+    }
+
+    function removeQuestion(index) {
+      questionsList.splice(index, 1);
+      renderQuestions();
+    }
+
+    function saveMock() {
+      const score = document.getElementById('mockScoreInput').value;
+      document.getElementById('avgScoreDisplay').innerText = score;
+      document.getElementById('totalMocksCount').innerText = "2";
+      alert('Mock analysis saved successfully!');
+      switchTab('dashboard');
+    }
+
+    function toggleSubscriptionModal() {
+      document.getElementById('subModal').classList.toggle('hidden');
+      lucide.createIcons();
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
