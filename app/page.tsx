@@ -607,7 +607,7 @@ export default function MockMasterApp() {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr class="border-b border-slate-200 text-slate-400 uppercase font-semibold">
+                  <tr className="border-b border-slate-200 text-slate-400 uppercase font-semibold">
                     <th className="py-2.5 px-3">Mock Test</th>
                     <th className="py-2.5 px-3">Platform</th>
                     <th className="py-2.5 px-3">Score</th>
