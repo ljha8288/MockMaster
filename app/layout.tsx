@@ -1,5 +1,5 @@
 import React from "react";
-import "./globals.css";
+
 export const metadata = {
   title: "MockMaster - Mock Test Analysis",
   description: "Advanced performance analytics & OCR scorecard tracker",
@@ -12,7 +12,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-slate-50 text-slate-900 antialiased min-h-screen">
+      <head>
+        <script src="https://cdn.tailwindcss.com"></script>
+      </head>
+      <body className="bg-slate-900 text-white antialiased min-h-screen">
         {children}
       </body>
     </html>
