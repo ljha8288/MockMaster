@@ -1,5 +1,5 @@
 import React from "react";
-
+import "./globals.css";
 export const metadata = {
   title: "MockMaster - Mock Test Analysis",
   description: "Advanced performance analytics & OCR scorecard tracker",
