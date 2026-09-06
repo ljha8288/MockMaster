@@ -1,54 +1,60 @@
-import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { NextResponse } from "next/server";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const formData = await req.formData();
-    const file = formData.get("image") as File;
-
-    if (!file) {
-      return NextResponse.json({ error: "No image uploaded" }, { status: 400 });
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: "GEMINI_API_KEY not configured" }, { status: 500 });
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const { imageBase64 } = await req.json();
+    if (!imageBase64) {
+      return NextResponse.json({ error: "No image provided" }, { status: 400 });
+    }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
-    const prompt = `
-      You are an expert OCR parser for Govt Exam Mock Test scorecards (Testbook, Oliveboard, RBE).
-      Extract the following details from this image accurately in pure JSON format:
-      {
-        "mockTitle": "extracted title or 'Mock Test'",
-        "platform": "Oliveboard",
-        "score": 0.0,
-        "totalMarks": 200,
-        "accuracy": 0.0,
-        "attempted": 0,
-        "correct": 0,
-        "wrong": 0,
-        "timeSpent": "e.g. 54m 20s"
-      }
-      Return ONLY raw JSON, no markdown blocks, no explanation.
-    `;
+    const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+
+    const prompt = `You are an expert OCR and exam scorecard parser for competitive exams. Analyze this scorecard image and return strictly valid JSON matching this exact structure:
+    {
+      "test_name": "Test Name or Exam",
+      "platform": "Testbook/Oliveboard/Other",
+      "total_score": 0,
+      "max_score": 200,
+      "accuracy": 0,
+      "percentile": 0,
+      "rank": 0,
+      "sections": [
+        {
+          "name": "Section Name",
+          "score": 0,
+          "max_score": 50,
+          "correct": 0,
+          "incorrect": 0,
+          "unattempted": 0,
+          "accuracy": 0
+        }
+      ]
+    }
+    Output ONLY the JSON object. Do not wrap in backticks or markdown.`;
 
     const result = await model.generateContent([
       prompt,
       {
         inlineData: {
-          data: buffer.toString("base64"),
-          mimeType: file.type || "image/png",
-        },
-      },
+          data: cleanBase64,
+          mimeType: "image/jpeg"
+        }
+      }
     ]);
 
-    const cleanJson = result.response.text().replace(/```json|```/g, "").trim();
-    const data = JSON.parse(cleanJson);
-
-    return NextResponse.json({ success: true, data });
+    const text = result.response.text();
+    const cleanJson = text.replace(/```json|```/g, "").trim();
+    return NextResponse.json(JSON.parse(cleanJson));
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Failed to scan" }, { status: 500 });
   }
 }
