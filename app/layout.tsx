@@ -1,8 +1,8 @@
 import React from "react";
 
 export const metadata = {
-  title: "MockMaster - Mock Test Analysis",
-  description: "Advanced performance analytics & OCR scorecard tracker",
+  title: "One Fight More - Mock Analysis Suite",
+  description: "Personal AI Mock Test Analysis Platform",
 };
 
 export default function RootLayout({
@@ -15,7 +15,7 @@ export default function RootLayout({
       <head>
         <script src="https://cdn.tailwindcss.com"></script>
       </head>
-      <body className="bg-slate-900 text-white antialiased min-h-screen">
+      <body className="bg-[#090d16] text-white antialiased min-h-screen">
         {children}
       </body>
     </html>
