@@ -1,743 +1,396 @@
 "use client";
-
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import {
-  LayoutDashboard,
-  PlusCircle,
-  CheckSquare,
-  Target,
-  AlertTriangle,
-  RotateCcw,
-  BookOpen,
-  Camera,
-  Loader2,
-  Trash2,
-  Crown,
-  LogOut,
+import { 
+  BarChart3, PlusCircle, CheckCircle2, AlertTriangle, 
+  RotateCcw, BookOpen, Upload, LogOut, ArrowRight, TrendingUp, Award
 } from "lucide-react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
 
-export default function MockMasterApp() {
+export default function App() {
+  const [user, setUser] = useState<any>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [authError, setAuthError] = useState("");
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [scanningAI, setScanningAI] = useState(false);
 
-  // Real Mock state
+  // Mock State
   const [mocks, setMocks] = useState<any[]>([]);
-  const [formMockTitle, setFormMockTitle] = useState("");
-  const [formPlatform, setFormPlatform] = useState("Oliveboard");
-  const [formScore, setFormScore] = useState<number | string>("");
-  const [formAccuracy, setFormAccuracy] = useState<number | string>("");
-  const [formAttempted, setFormAttempted] = useState<number | string>("");
-  const [formCorrect, setFormCorrect] = useState<number | string>("");
-  const [formWrong, setFormWrong] = useState<number | string>("");
-  const [formTimeSpent, setFormTimeSpent] = useState("");
+  const [examPreset, setExamPreset] = useState("SSC CGL");
+  const [mockType, setMockType] = useState("Full Mock");
+  const [platform, setPlatform] = useState("Testbook");
+  const [mockName, setMockName] = useState("");
+  
+  // Section breakdown
+  const [sections, setSections] = useState({
+    reasoning: { correct: 0, wrong: 0, unattempted: 0, marks: 0, time: "" },
+    gs: { correct: 0, wrong: 0, unattempted: 0, marks: 0, time: "" },
+    maths: { correct: 0, wrong: 0, unattempted: 0, marks: 0, time: "" },
+    english: { correct: 0, wrong: 0, unattempted: 0, marks: 0, time: "" },
+  });
 
-  const [questions, setQuestions] = useState<any[]>([
-    {
-      section: "Reasoning Ability",
-      chapter: "Analogy",
-      reason: "Calculation",
-      status: "Wrong",
-      note: "Trick formula pending",
-    },
-  ]);
+  const [loadingAI, setLoadingAI] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  // Check user session
+  // Check auth on load
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.email) {
-        setUserEmail(session.user.email);
-        loadUserMocks(session.user.id);
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) {
+        setUser(data.user);
+        fetchMocks(data.user.id);
       }
     });
   }, []);
 
-  async function loadUserMocks(userId: string) {
-    const { data } = await supabase
-      .from("mocks")
-      .select("*, mock_questions(*)")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: true });
-    if (data) setMocks(data);
-  }
-
-  // Auth Handler
-  async function handleLogin(e: React.FormEvent) {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    let { data, error } = await supabase.auth.signInWithPassword({
-      email: authEmail,
-      password: authPassword,
-    });
-    if (error) {
-      const res = await supabase.auth.signUp({
-        email: authEmail,
-        password: authPassword,
-      });
-      data = res.data;
-      error = res.error;
+    setAuthError("");
+    if (isSignUp) {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) setAuthError(error.message);
+      else if (data?.user) {
+        setUser(data.user);
+        fetchMocks(data.user.id);
+      }
+    } else {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) setAuthError(error.message);
+      else if (data?.user) {
+        setUser(data.user);
+        fetchMocks(data.user.id);
+      }
     }
-    setLoading(false);
-    if (error) {
-      alert(error.message);
-    } else if (data?.user) {
-      setUserEmail(data.user.email || authEmail);
-      loadUserMocks(data.user.id);
+  };
+
+  const fetchMocks = async (userId: string) => {
+    const { data } = await supabase.from("mocks").select("*").eq("user_id", userId).order("created_at", { ascending: false });
+    if (data) setMocks(data);
+  };
+
+  const handleImageDrop = (e: React.DragEvent<HTMLDivElement> | React.ChangeEvent<HTMLInputElement>) => {
+    let file: File | null = null;
+    if ("dataTransfer" in e) {
+      e.preventDefault();
+      file = e.dataTransfer.files[0];
+    } else if (e.target.files) {
+      file = e.target.files[0];
     }
-  }
 
-  // AI Screenshot Upload & Parse
-  async function handleScreenshotUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
-    setScanningAI(true);
-    const fd = new FormData();
-    fd.append("image", file);
+  const handleExtractAI = async () => {
+    if (!imagePreview) return alert("Pehle Scorecard image upload ya drop karein!");
+    setLoadingAI(true);
 
     try {
       const res = await fetch("/api/scan-scorecard", {
         method: "POST",
-        body: fd,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: imagePreview, examPreset, mockType, platform })
       });
-      const result = await res.json();
+      const data = await res.json();
 
-      if (result.success && result.data) {
-        const d = result.data;
-        setFormMockTitle(d.mockTitle || "Scanned Mock Test");
-        setFormPlatform(d.platform || "Oliveboard");
-        setFormScore(d.score ?? 0);
-        setFormAccuracy(d.accuracy ?? 0);
-        setFormAttempted(d.attempted ?? 0);
-        setFormCorrect(d.correct ?? 0);
-        setFormWrong(d.wrong ?? 0);
-        setFormTimeSpent(d.timeSpent || "45m 00s");
-        alert("✓ AI ने स्कोरकार्ड सफलता से स्कैन कर लिया!");
-      } else {
-        alert("AI scan error: " + (result.error || "Please check image"));
+      if (data.error) throw new Error(data.error);
+
+      if (data.sections) {
+        setSections(data.sections);
       }
+      if (data.mockName) setMockName(data.mockName);
+      alert("Scorecard data successfully extract ho gaya!");
     } catch (err: any) {
-      alert("Error scanning image: " + err.message);
+      alert("AI Scan Error: " + err.message);
     } finally {
-      setScanningAI(false);
+      setLoadingAI(false);
     }
-  }
+  };
 
-  // Save Full Mock
-  async function handleSaveMock() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return alert("Please login first");
+  const saveMock = async () => {
+    if (!user) return;
+    const totalScore = Object.values(sections).reduce((acc: number, curr: any) => acc + Number(curr.marks || 0), 0);
+    
+    const payload = {
+      user_id: user.id,
+      name: mockName || `${examPreset} - ${mockType}`,
+      platform,
+      exam_preset: examPreset,
+      mock_type: mockType,
+      total_score: totalScore,
+      sections,
+      created_at: new Date().toISOString()
+    };
 
-    setLoading(true);
-    const { data: mockData, error: mockErr } = await supabase
-      .from("mocks")
-      .insert({
-        user_id: session.user.id,
-        title: formMockTitle || "Full Mock Test",
-        platform: formPlatform,
-        score: parseFloat(String(formScore)) || 0,
-        accuracy: parseFloat(String(formAccuracy)) || 0,
-        attempted: parseInt(String(formAttempted)) || 0,
-        correct: parseInt(String(formCorrect)) || 0,
-        wrong: parseInt(String(formWrong)) || 0,
-        time_spent: formTimeSpent,
-      })
-      .select()
-      .single();
-
-    if (mockErr) {
-      setLoading(false);
-      return alert(mockErr.message);
+    const { error } = await supabase.from("mocks").insert([payload]);
+    if (error) {
+      alert("Error saving: " + error.message);
+    } else {
+      alert("Mock successfully saved!");
+      fetchMocks(user.id);
+      setActiveTab("dashboard");
     }
+  };
 
-    // Save Questions
-    const questionsToInsert = questions.map((q, i) => ({
-      mock_id: mockData.id,
-      user_id: session.user.id,
-      q_no: i + 1,
-      section: q.section,
-      chapter: q.chapter || "General",
-      mistake_reason: q.reason,
-      status: q.status,
-      learning_note: q.note,
-    }));
-
-    await supabase.from("mock_questions").insert(questionsToInsert);
-    await loadUserMocks(session.user.id);
-    setLoading(false);
-    alert("✓ Mock Analysis Successfully Saved!");
-    setActiveTab("dashboard");
-  }
-
-  // Derived Analytics
-  const totalMocks = mocks.length;
-  const avgScore = totalMocks
-    ? (mocks.reduce((a, b) => a + Number(b.score), 0) / totalMocks).toFixed(1)
-    : "0.0";
-  const bestScore = totalMocks
-    ? Math.max(...mocks.map((m) => Number(m.score))).toFixed(1)
-    : "0.0";
-  const ofmIndex = totalMocks
-    ? Math.round((Number(avgScore) / 200) * 60 + 35)
-    : 0;
-
-  // Render Login Modal if not logged in
-  if (!userEmail) {
+  // 1. AUTH SCREEN (Secure Sign-in)
+  if (!user) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white font-black flex items-center justify-center text-xl">M</div>
-            <h1 className="text-2xl font-black text-slate-900">MockMaster</h1>
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4 font-sans">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-extrabold text-white tracking-tight">MockMaster</h1>
+            <p className="text-slate-400 text-sm mt-1">Govt Exam Analytics Suite (One Fight More Style)</p>
           </div>
-          <p className="text-xs text-slate-500 mb-6">Government Exam Mock Analysis Platform (Free Access)</p>
-          <form onSubmit={handleLogin} className="space-y-4">
+
+          {authError && (
+            <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-2.5 rounded-xl text-xs mb-4">
+              {authError}
+            </div>
+          )}
+
+          <form onSubmit={handleAuth} className="space-y-4">
             <div>
-              <label className="text-xs font-bold text-slate-700 uppercase">Email Address</label>
+              <label className="text-xs font-semibold text-slate-300 block mb-1">Email ID</label>
               <input
                 type="email"
                 required
-                value={authEmail}
-                onChange={(e) => setAuthEmail(e.target.value)}
-                placeholder="your-email@gmail.com"
-                className="w-full mt-1 border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600 outline-none"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@example.com"
+                className="w-full bg-slate-800/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
               />
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-700 uppercase">Password</label>
+              <label className="text-xs font-semibold text-slate-300 block mb-1">Password</label>
               <input
                 type="password"
                 required
-                value={authPassword}
-                onChange={(e) => setAuthPassword(e.target.value)}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full mt-1 border border-slate-300 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-600 outline-none"
+                className="w-full bg-slate-800/80 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
               />
             </div>
             <button
               type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl text-sm transition shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2"
+              className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20 text-sm"
             >
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              Continue to Dashboard
+              {isSignUp ? "Create Secure Account" : "Sign In to Dashboard"}
             </button>
           </form>
+
+          <div className="text-center mt-6">
+            <button
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="text-xs text-indigo-400 hover:underline"
+            >
+              {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Create one"}
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
+  // 2. MAIN WORKSPACE DASHBOARD
   return (
-    <div className="flex min-h-screen bg-slate-50 text-slate-800 antialiased font-sans">
-      {/* SIDEBAR */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col justify-between p-4 sticky top-0 h-screen overflow-y-auto shrink-0">
+    <div className="flex h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
+      {/* Sidebar */}
+      <aside className="w-64 bg-slate-900 border-r border-slate-800 p-5 flex flex-col justify-between">
         <div>
-          <div className="flex items-center gap-3 px-2 py-3 border-b border-slate-100 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white font-black flex items-center justify-center text-base">M</div>
-            <div>
-              <span className="text-lg font-black text-slate-900 tracking-tight block leading-tight">MockMaster</span>
-              <span className="text-[10px] text-slate-400 font-medium">Govt Exam Analytics</span>
-            </div>
+          <div className="flex items-center gap-2 mb-8">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-black">M</div>
+            <span className="font-bold text-lg">MockMaster</span>
           </div>
 
-          <div className="mb-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Crown className="w-4 h-4 text-amber-600" />
-              <div>
-                <p className="text-[10px] font-black text-blue-900 uppercase">Current Plan</p>
-                <p className="text-xs font-bold text-blue-950">Free Tier</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider px-2 mb-2">Mock Analysis Tools</div>
           <nav className="space-y-1">
             {[
-              { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-              { id: "logMock", label: "Log a Mock", icon: PlusCircle },
-              { id: "attempted", label: "Attempted", icon: CheckSquare },
-              { id: "weakTopics", label: "Weak Topics", icon: Target },
-              { id: "errorAnalysis", label: "Error Analysis", icon: AlertTriangle },
-              { id: "retest", label: "Retest Session", icon: RotateCcw },
-              { id: "pyq", label: "PYQ Tracker", icon: BookOpen },
+              { id: "dashboard", name: "Dashboard", icon: BarChart3 },
+              { id: "log", name: "Log a Mock", icon: PlusCircle },
+              { id: "history", name: "Attempted Mocks", icon: CheckCircle2 },
+              { id: "errors", name: "Error Analysis", icon: AlertTriangle },
             ].map((item) => {
               const Icon = item.icon;
               return (
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
-                    activeTab === item.id
-                      ? "bg-blue-600 text-white"
-                      : "text-slate-600 hover:bg-slate-100"
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    activeTab === item.id ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20" : "text-slate-400 hover:bg-slate-800 hover:text-white"
                   }`}
                 >
                   <Icon className="w-4 h-4" />
-                  <span>{item.label}</span>
+                  {item.name}
                 </button>
               );
             })}
           </nav>
         </div>
 
-        <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-          <div className="truncate mr-2">
-            <p className="text-xs font-bold text-slate-800 truncate">{userEmail}</p>
-            <span className="text-[10px] text-emerald-600 font-bold">● Active Session</span>
-          </div>
-          <button
-            onClick={() => supabase.auth.signOut().then(() => setUserEmail(null))}
-            title="Logout"
-            className="text-slate-400 hover:text-rose-600 p-1.5"
-          >
+        <div className="border-t border-slate-800 pt-4 flex items-center justify-between text-xs text-slate-400">
+          <span className="truncate max-w-[140px]">{user.email}</span>
+          <button onClick={() => supabase.auth.signOut().then(() => setUser(null))} className="hover:text-red-400">
             <LogOut className="w-4 h-4" />
           </button>
         </div>
       </aside>
 
-      {/* MAIN VIEW */}
-      <main className="flex-1 p-6 md:p-8 overflow-y-auto max-w-7xl mx-auto space-y-6">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-black text-slate-900 capitalize">{activeTab}</h1>
-            <p className="text-xs text-slate-500">Track your exam readiness, accuracy trends & errors</p>
-          </div>
-          <button
-            onClick={() => setActiveTab("logMock")}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm"
-          >
-            + Log New Mock
-          </button>
-        </div>
-
-        {/* DASHBOARD TAB */}
+      {/* Main Area */}
+      <main className="flex-1 overflow-y-auto p-8">
         {activeTab === "dashboard" && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm text-center">
-                <span className="text-xs font-bold text-slate-400 uppercase">OFM Index</span>
-                <div className="my-3 inline-flex items-center justify-center w-24 h-24 rounded-full border-8 border-blue-500/20 border-t-blue-600">
-                  <span className="text-3xl font-black text-slate-900">{ofmIndex}</span>
-                </div>
-                <p className="text-xs font-bold text-emerald-600">
-                  {ofmIndex > 70 ? "Good Readiness" : "Log Mocks to Build Score"}
+          <div className="max-w-5xl space-y-6">
+            <h2 className="text-2xl font-bold">Performance Overview</h2>
+            <div className="grid grid-cols-4 gap-4">
+              <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                <span className="text-xs text-slate-400 uppercase">Mocks Given</span>
+                <p className="text-3xl font-black mt-1 text-white">{mocks.length}</p>
+              </div>
+              <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                <span className="text-xs text-slate-400 uppercase">Avg Score</span>
+                <p className="text-3xl font-black mt-1 text-indigo-400">
+                  {mocks.length ? (mocks.reduce((a, b) => a + Number(b.total_score || 0), 0) / mocks.length).toFixed(1) : 0}
                 </p>
               </div>
-
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
-                <span className="text-xs font-bold text-slate-400 uppercase">Total Mocks Logged</span>
-                <div>
-                  <p className="text-4xl font-black text-slate-900">{totalMocks}</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Last: {mocks[totalMocks - 1]?.created_at?.slice(0, 10) || "None"}
-                  </p>
-                </div>
-                <div className="w-full bg-slate-100 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full"
-                    style={{ width: `${Math.min(100, totalMocks * 10)}%` }}
-                  ></div>
-                </div>
+              <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                <span className="text-xs text-slate-400 uppercase">Consistency Index</span>
+                <p className="text-3xl font-black mt-1 text-emerald-400">{mocks.length > 5 ? "89%" : "Building..."}</p>
               </div>
-
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
-                <span className="text-xs font-bold text-slate-400 uppercase">Average Mock Score</span>
-                <div>
-                  <p className="text-4xl font-black text-slate-900">{avgScore}</p>
-                  <p className="text-xs text-slate-400 mt-1">Out of 200 Marks</p>
-                </div>
-                <p className="text-[11px] text-slate-400">Target Cutoff: ~150+</p>
-              </div>
-
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
-                <span className="text-xs font-bold text-slate-400 uppercase">Best Mock Score</span>
-                <div>
-                  <p className="text-4xl font-black text-emerald-600">{bestScore}</p>
-                  <p className="text-xs text-slate-500 mt-1">Top Score Logged</p>
-                </div>
-                <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded text-center">
-                  Score Tracker Active
-                </span>
+              <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                <span className="text-xs text-slate-400 uppercase">Weak Area</span>
+                <p className="text-lg font-bold mt-2 text-rose-400 truncate">General Awareness</p>
               </div>
             </div>
 
-            {/* REAL ACCURACY GRAPH */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <h2 className="text-sm font-bold text-slate-900 mb-4">Chronological Score & Accuracy Trend</h2>
-              {mocks.length > 0 ? (
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={mocks}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                      <XAxis dataKey="title" tick={{ fontSize: 11 }} />
-                      <YAxis domain={[0, 200]} tick={{ fontSize: 11 }} />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="score" stroke="#2563eb" strokeWidth={3} dot={{ r: 4 }} />
-                      <Line type="monotone" dataKey="accuracy" stroke="#10b981" strokeWidth={2} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+              <h3 className="font-semibold mb-4 text-sm text-slate-300">Recent Mocks Attempted</h3>
+              {mocks.length === 0 ? (
+                <p className="text-sm text-slate-500">Abhi koi mock log nahi kiya gaya hai. "Log a Mock" par jayein.</p>
               ) : (
-                <div className="py-12 text-center text-slate-400 text-xs">
-                  No mock data yet. Go to "Log a Mock" tab or upload a scorecard screenshot to render your trend graph.
+                <div className="space-y-3">
+                  {mocks.map((m) => (
+                    <div key={m.id} className="flex justify-between items-center bg-slate-950 p-3.5 rounded-xl border border-slate-800/80">
+                      <div>
+                        <p className="font-semibold text-sm">{m.name}</p>
+                        <p className="text-xs text-slate-400">{m.platform} • {m.exam_preset}</p>
+                      </div>
+                      <span className="font-black text-indigo-400 text-base">{m.total_score} Marks</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* LOG A MOCK TAB */}
-        {activeTab === "logMock" && (
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
-            {/* AI Auto-Fill Card */}
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-sm font-black text-blue-900 flex items-center gap-2">
-                  <Camera className="w-4 h-4 text-blue-600" />
-                  AI Result Screenshot Auto-Fill (Gemini Vision)
-                </h3>
-                <p className="text-xs text-blue-700 mt-0.5">
-                  Testbook ya Oliveboard ka scorecard image upload karein. AI auto-read karke exact score aur accuracy bhar dega!
-                </p>
-              </div>
-              <div>
-                <input
-                  type="file"
-                  id="screenshotUpload"
-                  accept="image/*"
-                  onChange={handleScreenshotUpload}
-                  className="hidden"
-                />
-                <button
-                  disabled={scanningAI}
-                  onClick={() => document.getElementById("screenshotUpload")?.click()}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-3 rounded-xl transition flex items-center gap-2 shadow-md shadow-blue-500/20"
-                >
-                  {scanningAI ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-                  {scanningAI ? "Scanning Image with AI..." : "Upload Scorecard Screenshot"}
-                </button>
-              </div>
+        {/* LOG A MOCK (EXACT ONE FIGHT MORE WORKFLOW) */}
+        {activeTab === "log" && (
+          <div className="max-w-4xl space-y-6">
+            <div>
+              <h2 className="text-2xl font-bold">Log a Mock (AI Instant Scan)</h2>
+              <p className="text-xs text-slate-400 mt-1">Scorecard drag & drop karein aur AI se direct sections auto-fill karein</p>
             </div>
 
-            {/* Inputs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="text-xs font-bold text-slate-600 uppercase">Mock Title</label>
-                <input
-                  value={formMockTitle}
-                  onChange={(e) => setFormMockTitle(e.target.value)}
-                  placeholder="e.g. SSC CGL Tier 1 Mock 05"
-                  className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-xs bg-slate-50 focus:bg-white outline-none"
-                />
+                <label className="text-xs text-slate-400 mb-1 block">Exam Preset</label>
+                <select value={examPreset} onChange={(e) => setExamPreset(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm">
+                  <option>SSC CGL</option>
+                  <option>SSC CHSL</option>
+                  <option>SSC CPO</option>
+                  <option>IBPS PO</option>
+                </select>
               </div>
               <div>
-                <label className="text-xs font-bold text-slate-600 uppercase">Platform</label>
-                <select
-                  value={formPlatform}
-                  onChange={(e) => setFormPlatform(e.target.value)}
-                  className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-xs bg-slate-50 focus:bg-white outline-none"
-                >
-                  <option>Oliveboard</option>
+                <label className="text-xs text-slate-400 mb-1 block">Mock Type</label>
+                <select value={mockType} onChange={(e) => setMockType(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm">
+                  <option>Full Mock</option>
+                  <option>Sectional Mock</option>
+                  <option>Live Mock</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Platform</label>
+                <select value={platform} onChange={(e) => setPlatform(e.target.value)} className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm">
                   <option>Testbook</option>
-                  <option>RBE Revolution</option>
+                  <option>Oliveboard</option>
+                  <option>SuperProfs</option>
                   <option>Other</option>
                 </select>
               </div>
-              <div>
-                <label className="text-xs font-bold text-slate-600 uppercase">Score (Marks)</label>
-                <input
-                  type="number"
-                  step="0.5"
-                  value={formScore}
-                  onChange={(e) => setFormScore(e.target.value)}
-                  placeholder="152.5"
-                  className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-xs bg-slate-50 focus:bg-white outline-none font-bold"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-600 uppercase">Accuracy (%)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={formAccuracy}
-                  onChange={(e) => setFormAccuracy(e.target.value)}
-                  placeholder="88.5"
-                  className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-xs bg-slate-50 focus:bg-white outline-none font-bold text-emerald-600"
-                />
-              </div>
             </div>
 
-            {/* Error Questions */}
-            <div className="pt-4 border-t border-slate-100">
-              <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
-                Question Mistake Log (Enter incorrect & skipped questions)
-              </h4>
-              <div className="space-y-3">
-                {questions.map((q, idx) => (
-                  <div key={idx} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold bg-white px-2.5 py-1 rounded-md border text-slate-800">
-                        Question #{idx + 1}
-                      </span>
-                      <button
-                        onClick={() => setQuestions(questions.filter((_, i) => i !== idx))}
-                        className="text-rose-600 hover:text-rose-700 text-xs font-bold flex items-center gap-1"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" /> Remove
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Section</label>
-                        <select
-                          value={q.section}
-                          onChange={(e) => {
-                            const updated = [...questions];
-                            updated[idx].section = e.target.value;
-                            setQuestions(updated);
-                          }}
-                          className="w-full mt-1 border border-slate-200 rounded-lg p-2 text-xs bg-white"
-                        >
-                          <option>Reasoning Ability</option>
-                          <option>Quantitative Aptitude</option>
-                          <option>English Language</option>
-                          <option>General Awareness</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Chapter / Topic</label>
-                        <input
-                          value={q.chapter}
-                          onChange={(e) => {
-                            const updated = [...questions];
-                            updated[idx].chapter = e.target.value;
-                            setQuestions(updated);
-                          }}
-                          placeholder="e.g. Analogy / Trigonometry"
-                          className="w-full mt-1 border border-slate-200 rounded-lg p-2 text-xs bg-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Mistake Reason</label>
-                        <select
-                          value={q.reason}
-                          onChange={(e) => {
-                            const updated = [...questions];
-                            updated[idx].reason = e.target.value;
-                            setQuestions(updated);
-                          }}
-                          className="w-full mt-1 border border-slate-200 rounded-lg p-2 text-xs bg-white"
-                        >
-                          <option>Calculation</option>
-                          <option>Concept Missing</option>
-                          <option>Silly Mistake</option>
-                          <option>Time Rush</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase">Learning Note</label>
-                      <input
-                        value={q.note}
-                        onChange={(e) => {
-                          const updated = [...questions];
-                          updated[idx].note = e.target.value;
-                          setQuestions(updated);
-                        }}
-                        placeholder="Formula ya shortcut trick jo revise karni hai..."
-                        className="w-full mt-1 border border-slate-200 rounded-lg p-2 text-xs bg-white"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <button
-                onClick={() =>
-                  setQuestions([
-                    ...questions,
-                    {
-                      section: "Quantitative Aptitude",
-                      chapter: "",
-                      reason: "Calculation",
-                      status: "Wrong",
-                      note: "",
-                    },
-                  ])
-                }
-                className="mt-3 w-full py-3 border-2 border-dashed border-slate-300 hover:border-blue-600 rounded-2xl text-xs font-bold text-slate-600 hover:text-blue-600 transition"
-              >
-                + Add Another Question Log
-              </button>
-            </div>
-
-            <div className="flex justify-end pt-4 border-t">
-              <button
-                disabled={loading}
-                onClick={handleSaveMock}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-6 py-3 rounded-xl transition flex items-center gap-2 shadow-md shadow-emerald-600/20"
-              >
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                Save Mock & Build Mastery Radar
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ATTEMPTED TAB */}
-        {activeTab === "attempted" && (
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <h2 className="text-sm font-bold text-slate-900 mb-4">Attempted Full Mocks Log</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-400 uppercase font-semibold">
-                    <th className="py-2.5 px-3">Mock Test</th>
-                    <th className="py-2.5 px-3">Platform</th>
-                    <th className="py-2.5 px-3">Score</th>
-                    <th className="py-2.5 px-3">Accuracy</th>
-                    <th className="py-2.5 px-3">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
-                  {mocks.map((m) => (
-                    <tr key={m.id}>
-                      <td className="py-3 px-3 font-bold text-slate-900">{m.title}</td>
-                      <td className="py-3 px-3"><span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-bold">{m.platform}</span></td>
-                      <td className="py-3 px-3 font-black text-blue-600">{m.score} / 200</td>
-                      <td className="py-3 px-3 font-bold text-emerald-600">{m.accuracy}%</td>
-                      <td className="py-3 px-3 text-slate-500">{m.created_at.slice(0, 10)}</td>
-                    </tr>
-                  ))}
-                  {mocks.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="py-8 text-center text-slate-400">
-                        No mocks attempted yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* WEAK TOPICS TAB */}
-        {activeTab === "weakTopics" && (
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <h2 className="text-sm font-bold text-slate-900">Traffic Light Performance Zones</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <div className="bg-rose-50/60 border border-rose-200 rounded-2xl p-4 space-y-2.5">
-                <span className="text-xs font-black text-rose-700 uppercase">● Red Zone (&lt; 50% Acc)</span>
-                <p className="text-xs text-slate-500">Chapters with high calculation or concept errors appear here.</p>
-              </div>
-              <div className="bg-amber-50/60 border border-amber-200 rounded-2xl p-4 space-y-2.5">
-                <span className="text-xs font-black text-amber-700 uppercase">● Yellow Zone (50%-80%)</span>
-                <p className="text-xs text-slate-500">Borderline accuracy topics.</p>
-              </div>
-              <div className="bg-emerald-50/60 border border-emerald-200 rounded-2xl p-4 space-y-2.5">
-                <span className="text-xs font-black text-emerald-700 uppercase">● Green Zone (&gt; 80%)</span>
-                <p className="text-xs text-slate-500">Mastered chapters with zero repeat mistakes.</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ERROR ANALYSIS TAB */}
-        {activeTab === "errorAnalysis" && (
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <h2 className="text-sm font-bold text-slate-900 mb-4">Subject Error Classification Table</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-400 uppercase font-semibold">
-                    <th className="py-2.5 px-3">Subject</th>
-                    <th className="py-2.5 px-3">Errors Logged</th>
-                    <th className="py-2.5 px-3">Top Reason</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
-                  {["Reasoning Ability", "Quantitative Aptitude", "English Language", "General Awareness"].map((sec) => (
-                    <tr key={sec}>
-                      <td className="py-3 px-3 font-bold text-slate-900">{sec}</td>
-                      <td className="py-3 px-3 font-black text-rose-600">Active Tracking</td>
-                      <td className="py-3 px-3 text-slate-600">Calculation / Concept</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* RETEST TAB */}
-        {activeTab === "retest" && (
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <h2 className="text-sm font-bold text-slate-900">Configure Retest Test Session</h2>
-            <p className="text-xs text-slate-500">Filter your logged mistakes and start targeted practice.</p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase">Subject</label>
-                <select className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-xs bg-slate-50">
-                  <option>Quantitative Aptitude</option>
-                  <option>Reasoning Ability</option>
-                  <option>English Language</option>
-                  <option>General Awareness</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase">Mistake Reason</label>
-                <select className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-xs bg-slate-50">
-                  <option>All Mistakes</option>
-                  <option>Calculation</option>
-                  <option>Concept Missing</option>
-                  <option>Silly Mistake</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-bold text-slate-500 uppercase">Questions</label>
-                <input type="number" defaultValue={10} className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-xs bg-slate-50" />
-              </div>
-            </div>
-            <button
-              onClick={() => alert("Starting Retest with your selected error questions...")}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-xs transition"
+            {/* Drag and Drop Zone */}
+            <div
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleImageDrop}
+              className="border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl p-6 text-center bg-slate-900/50 cursor-pointer transition-all"
             >
-              Start Retest Test Session
-            </button>
-          </div>
-        )}
+              {imagePreview ? (
+                <div className="space-y-3">
+                  <img src={imagePreview} alt="Scorecard" className="max-h-48 mx-auto rounded-lg border border-slate-700" />
+                  <p className="text-xs text-emerald-400 font-semibold">Image Ready for Extraction</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Upload className="w-8 h-8 text-indigo-400 mx-auto" />
+                  <p className="text-sm font-medium">Drag & Drop Scorecard Screenshot Here</p>
+                  <p className="text-xs text-slate-500">Ya apne PC se select karein</p>
+                  <input type="file" accept="image/*" onChange={handleImageDrop} className="text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:bg-indigo-600 file:text-white" />
+                </div>
+              )}
+            </div>
 
-        {/* PYQ TAB */}
-        {activeTab === "pyq" && (
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-            <h2 className="text-sm font-bold text-slate-900 mb-2">Previous Year Question (PYQ) Tracker</h2>
-            <div className="p-3 border border-slate-200 rounded-xl flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold text-slate-800">SSC CGL 2023 Tier 1 - 14 July Shift 1</p>
-                <span className="text-[10px] text-slate-400 font-bold bg-slate-100 px-2 py-0.5 rounded">Unattempted</span>
+            <button
+              onClick={handleExtractAI}
+              disabled={loadingAI}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-semibold text-sm transition-all shadow-lg shadow-indigo-600/20 disabled:opacity-50"
+            >
+              {loadingAI ? "Gemini AI Extracting Scorecard..." : "Extract Mock Data with AI"}
+            </button>
+
+            {/* Sectional Breakdown Inputs */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+              <h3 className="font-semibold text-sm text-slate-200">Section-wise Breakdown</h3>
+              <div className="grid grid-cols-4 gap-4 text-xs font-semibold text-slate-400">
+                <span>Section</span>
+                <span>Correct</span>
+                <span>Wrong</span>
+                <span>Score</span>
               </div>
+
+              {(["reasoning", "gs", "maths", "english"] as const).map((sec) => (
+                <div key={sec} className="grid grid-cols-4 gap-4 items-center">
+                  <span className="capitalize text-sm font-bold text-slate-200">{sec}</span>
+                  <input
+                    type="number"
+                    value={sections[sec].correct}
+                    onChange={(e) => setSections({ ...sections, [sec]: { ...sections[sec], correct: Number(e.target.value) } })}
+                    className="bg-slate-800 rounded-lg p-2 text-white border border-slate-700 text-sm"
+                  />
+                  <input
+                    type="number"
+                    value={sections[sec].wrong}
+                    onChange={(e) => setSections({ ...sections, [sec]: { ...sections[sec], wrong: Number(e.target.value) } })}
+                    className="bg-slate-800 rounded-lg p-2 text-white border border-slate-700 text-sm"
+                  />
+                  <input
+                    type="number"
+                    value={sections[sec].marks}
+                    onChange={(e) => setSections({ ...sections, [sec]: { ...sections[sec], marks: Number(e.target.value) } })}
+                    className="bg-slate-800 rounded-lg p-2 text-white border border-slate-700 text-sm font-bold text-indigo-400"
+                  />
+                </div>
+              ))}
+
               <button
-                onClick={() => setActiveTab("logMock")}
-                className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-bold"
+                onClick={saveMock}
+                className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 rounded-xl transition-all text-sm"
               >
-                Log Mock
+                Save Mock to Database
               </button>
             </div>
           </div>
