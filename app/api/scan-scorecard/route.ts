@@ -1,30 +1,49 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: "GEMINI_API_KEY missing" }, { status: 500 });
+      return NextResponse.json({ error: "GEMINI_API_KEY Vercel Environment Variables mein missing hai." }, { status: 500 });
     }
 
     const { imageBase64, examPreset, mockType, platform } = await req.json();
     if (!imageBase64) {
-      return NextResponse.json({ error: "No image provided" }, { status: 400 });
+      return NextResponse.json({ error: "Scorecard screenshot nahi mila." }, { status: 400 });
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const candidateModels = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+    // 1. Fetch available models for this API key to permanently avoid 404
+    let chosenModel = "gemini-2.5-flash";
+    try {
+      const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      const listData = await listRes.json();
+      if (listData.models && Array.isArray(listData.models)) {
+        const supported = listData.models.filter((m: any) => 
+          m.supportedGenerationMethods?.includes("generateContent") &&
+          (m.name.includes("flash") || m.name.includes("pro"))
+        );
+        // Priority order for newest active models
+        const preferred = supported.find((m: any) => m.name.includes("3.5-flash") || m.name.includes("3.1-flash") || m.name.includes("2.5-flash") || m.name.includes("2.0-flash"));
+        if (preferred) {
+          chosenModel = preferred.name.replace("models/", "");
+        } else if (supported.length > 0) {
+          chosenModel = supported[0].name.replace("models/", "");
+        }
+      }
+    } catch (e) {
+      console.error("Auto model detect fallback:", e);
+    }
+
     const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
 
-    const prompt = `You are an OCR engine for competitive exam scorecards (SSC, Banking).
+    const promptText = `You are an automated OCR scorecard parser for exams like SSC CGL, CHSL, CPO, Banking.
 Extract section marks, correct count, wrong count, and unattempted count for:
-1. reasoning
-2. gs
-3. maths
-4. english
+1. reasoning (General Intelligence & Reasoning)
+2. gs (General Awareness / GK)
+3. maths (Quantitative Aptitude)
+4. english (English Language)
 
-Return strictly raw JSON format without markdown code blocks:
+Return strictly valid JSON only:
 {
   "mockName": "${examPreset} ${mockType}",
   "sections": {
@@ -33,30 +52,39 @@ Return strictly raw JSON format without markdown code blocks:
     "maths": { "correct": 0, "wrong": 0, "unattempted": 0, "marks": 0 },
     "english": { "correct": 0, "wrong": 0, "unattempted": 0, "marks": 0 }
   }
-}`;
+}
+No backticks, return raw JSON string.`;
 
-    let rawText = "";
-    let lastErr = null;
+    // 2. Direct REST Call to the active model
+    const apiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${chosenModel}:generateContent?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: promptText },
+              {
+                inlineData: {
+                  mimeType: "image/jpeg",
+                  data: cleanBase64
+                }
+              }
+            ]
+          }
+        ]
+      })
+    });
 
-    for (const modelName of candidateModels) {
-      try {
-        const model = genAI.getGenerativeModel({ model: modelName });
-        const res = await model.generateContent([
-          prompt,
-          { inlineData: { data: cleanBase64, mimeType: "image/jpeg" } }
-        ]);
-        rawText = res.response.text();
-        if (rawText) break;
-      } catch (err) {
-        lastErr = err;
-      }
+    const resJson = await apiRes.json();
+    if (!apiRes.ok || resJson.error) {
+      throw new Error(resJson.error?.message || `HTTP ${apiRes.status} Error`);
     }
 
-    if (!rawText && lastErr) throw lastErr;
-
-    const clean = rawText.replace(/```json|```/g, "").trim();
-    return NextResponse.json(JSON.parse(clean));
+    const rawText = resJson.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    const cleanOutput = rawText.replace(/```json|```/g, "").trim();
+    return NextResponse.json(JSON.parse(cleanOutput));
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Failed" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Failed to scan" }, { status: 500 });
   }
 }
