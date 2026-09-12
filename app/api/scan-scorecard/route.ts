@@ -15,7 +15,7 @@ export async function POST(req: Request) {
 
     const genAI = new GoogleGenerativeAI(apiKey);
     // Exact standard model string without '-latest'
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash" });
 
     const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
 
