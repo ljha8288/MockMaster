@@ -4,13 +4,13 @@ import {
   LayoutDashboard, PlusCircle, CheckSquare, AlertOctagon, 
   RotateCcw, Upload, Trash2, CheckCircle2, Image as ImageIcon,
   HelpCircle, Lightbulb, TrendingUp, Target, Award, Eye, Flame, 
-  BarChart3, Activity, Layers, ArrowUpRight, Clock
+  BarChart3, Activity, Layers, ArrowUpRight, Clock, SkipForward, XCircle
 } from "lucide-react";
 
 export default function OneFightMorePlatform() {
   const [activeTab, setActiveTab] = useState("dashboard");
 
-  // Persistent storage (Never lost across sessions on this device)
+  // Persistent storage (Single personal user workspace)
   const [mocks, setMocks] = useState<any[]>([]);
   const [errorQuestions, setErrorQuestions] = useState<any[]>([]);
 
@@ -30,13 +30,14 @@ export default function OneFightMorePlatform() {
     english: { correct: 0, wrong: 0, unattempted: 0, marks: 0, accuracy: 0 },
   });
 
-  // Attached Questions (Digital Error Copy)
+  // Attached Questions (Wrong + Skipped Questions)
   const [tempQuestions, setTempQuestions] = useState<any[]>([]);
+  const [qStatus, setQStatus] = useState<"WRONG" | "SKIPPED">("WRONG");
   const [qImage, setQImage] = useState<string | null>(null);
   const [qSubject, setQSubject] = useState("maths");
   const [qTopic, setQTopic] = useState("");
-  const [qTag, setQTag] = useState("Silly Error");
-  const [qWhyWrong, setQWhyWrong] = useState("");
+  const [qTag, setQTag] = useState("Silly Error (Calculation)");
+  const [qWhyReason, setQWhyReason] = useState("");
   const [qLearnedNote, setQLearnedNote] = useState("");
 
   // Retest & Preview State
@@ -48,8 +49,8 @@ export default function OneFightMorePlatform() {
   // Load from persistent local database on mount
   useEffect(() => {
     try {
-      const savedM = localStorage.getItem("ofm_v3_mocks");
-      const savedE = localStorage.getItem("ofm_v3_errors");
+      const savedM = localStorage.getItem("ofm_v4_mocks");
+      const savedE = localStorage.getItem("ofm_v4_errors");
       if (savedM) setMocks(JSON.parse(savedM));
       if (savedE) setErrorQuestions(JSON.parse(savedE));
     } catch (e) {
@@ -60,8 +61,8 @@ export default function OneFightMorePlatform() {
   const persist = (m: any[], e: any[]) => {
     setMocks(m);
     setErrorQuestions(e);
-    localStorage.setItem("ofm_v3_mocks", JSON.stringify(m));
-    localStorage.setItem("ofm_v3_errors", JSON.stringify(e));
+    localStorage.setItem("ofm_v4_mocks", JSON.stringify(m));
+    localStorage.setItem("ofm_v4_errors", JSON.stringify(e));
   };
 
   const handleScorecardDrop = (e: any) => {
@@ -108,23 +109,24 @@ export default function OneFightMorePlatform() {
 
   const addQuestion = () => {
     if (!qTopic) return alert("Chapter/Topic ka naam dalein!");
-    if (!qWhyWrong) return alert("'Yeh sawal kyu galat hua?' likhna zaroori hai!");
+    if (!qWhyReason) return alert(qStatus === "WRONG" ? "'Kyu galat hua?' likhna zaroori hai!" : "'Kyu chhoda?' likhna zaroori hai!");
 
     const newQ = {
       id: Date.now(),
+      status: qStatus, // WRONG or SKIPPED
       image: qImage,
       subject: qSubject,
       topic: qTopic,
       tag: qTag,
-      whyWrong: qWhyWrong,
-      learnedNote: qLearnedNote || "Key concept revision needed.",
+      whyReason: qWhyReason,
+      learnedNote: qLearnedNote || (qStatus === "WRONG" ? "Formula revision required." : "Speed & short trick practice required."),
       date: new Date().toLocaleDateString("en-IN")
     };
 
     setTempQuestions([newQ, ...tempQuestions]);
     setQImage(null);
     setQTopic("");
-    setQWhyWrong("");
+    setQWhyReason("");
     setQLearnedNote("");
   };
 
@@ -142,6 +144,8 @@ export default function OneFightMorePlatform() {
       totalScore,
       sections,
       questionsCount: tempQuestions.length,
+      wrongCount: tempQuestions.filter(q => q.status === "WRONG").length,
+      skippedCount: tempQuestions.filter(q => q.status === "SKIPPED").length,
       date: new Date().toLocaleDateString("en-IN", { month: "short", day: "numeric" }),
       timestamp: Date.now()
     };
@@ -151,7 +155,7 @@ export default function OneFightMorePlatform() {
     const updatedErrors = [...taggedQuestions, ...errorQuestions];
 
     persist(updatedMocks, updatedErrors);
-    alert("Mock aur Error Copy permanent save ho gaye!");
+    alert("Mock, Wrong Questions aur Skipped Questions sabhi permanent save ho gaye!");
 
     setScorecardImage(null);
     setTempQuestions([]);
@@ -166,15 +170,21 @@ export default function OneFightMorePlatform() {
   const bestScore = totalMocks ? Math.max(...mocks.map(m => Number(m.totalScore || 0))) : 0;
   const ofmIndex = totalMocks >= 3 ? 92.4 : totalMocks * 30;
 
-  // Mistake counts for OFM Donut Breakdown
-  const sillyMistakesCount = errorQuestions.filter(q => q.tag.includes("Silly")).length;
-  const conceptGapsCount = errorQuestions.filter(q => q.tag.includes("Conceptual")).length;
-  const timeTrapsCount = errorQuestions.filter(q => q.tag.includes("Time")).length;
-  const guessedCount = errorQuestions.filter(q => q.tag.includes("Guessed")).length;
+  // Breakdown Counts
+  const totalWrongLogged = errorQuestions.filter(q => q.status === "WRONG").length;
+  const totalSkippedLogged = errorQuestions.filter(q => q.status === "SKIPPED").length;
 
-  const filteredErrors = selectedErrorFilter === "ALL" 
-    ? errorQuestions 
-    : errorQuestions.filter(q => q.subject === selectedErrorFilter || q.tag === selectedErrorFilter);
+  const sillyMistakesCount = errorQuestions.filter(q => q.tag?.includes("Silly")).length;
+  const conceptGapsCount = errorQuestions.filter(q => q.tag?.includes("Concept")).length;
+  const timeTrapsCount = errorQuestions.filter(q => q.tag?.includes("Time")).length;
+  const lengthySkippedCount = errorQuestions.filter(q => q.tag?.includes("Lengthy")).length;
+
+  const filteredErrors = errorQuestions.filter(q => {
+    if (selectedErrorFilter === "ALL") return true;
+    if (selectedErrorFilter === "WRONG") return q.status === "WRONG";
+    if (selectedErrorFilter === "SKIPPED") return q.status === "SKIPPED";
+    return q.subject === selectedErrorFilter || q.tag === selectedErrorFilter;
+  });
 
   // SVG Chart points calculation (chronological)
   const chartMocks = [...mocks].reverse();
@@ -196,7 +206,7 @@ export default function OneFightMorePlatform() {
   return (
     <div className="flex h-screen bg-[#070b13] text-slate-100 font-sans overflow-hidden">
       
-      {/* Sidebar - One Fight More Dark Theme */}
+      {/* Sidebar */}
       <aside className="w-64 bg-[#0d1322] border-r border-slate-800/70 p-5 flex flex-col justify-between">
         <div className="space-y-6">
           <div className="flex items-center gap-3">
@@ -205,15 +215,15 @@ export default function OneFightMorePlatform() {
             </div>
             <div>
               <h2 className="font-extrabold text-sm tracking-wide text-white">One Fight More</h2>
-              <p className="text-[10px] text-blue-400 font-semibold">Personal Mock Engine</p>
+              <p className="text-[10px] text-blue-400 font-semibold">Mock & Question Notebook</p>
             </div>
           </div>
 
           <nav className="space-y-1.5">
             {[
               { id: "dashboard", label: "Dashboard & Graphs", icon: LayoutDashboard },
-              { id: "log", label: "Log a Mock (Dual-Tab)", icon: PlusCircle },
-              { id: "errors", label: "Digital Error Copy", icon: AlertOctagon },
+              { id: "log", label: "Log Mock + Questions", icon: PlusCircle },
+              { id: "errors", label: "Error & Skip Copy", icon: AlertOctagon },
               { id: "retest", label: "Retest Drill Engine", icon: RotateCcw },
               { id: "history", label: "Attempted Mocks Log", icon: CheckSquare },
             ].map((tab) => {
@@ -247,13 +257,13 @@ export default function OneFightMorePlatform() {
       {/* Main Container */}
       <main className="flex-1 overflow-y-auto p-8 bg-[#070b13]">
 
-        {/* 1. DASHBOARD WITH VISUAL SCORE & ACCURACY GRAPHS */}
+        {/* 1. DASHBOARD WITH SCORE & SKIPPED VS WRONG GRAPHS */}
         {activeTab === "dashboard" && (
           <div className="max-w-6xl space-y-6 pb-16">
             <div className="flex justify-between items-center">
               <div>
                 <h1 className="text-2xl font-black text-white tracking-tight">Performance Analytics & Graphs</h1>
-                <p className="text-xs text-slate-400 mt-0.5">Real-time score trends, mistake distribution & subject readiness</p>
+                <p className="text-xs text-slate-400 mt-0.5">Track your score trends, skipped reasons & silly mistakes</p>
               </div>
               <button onClick={() => setActiveTab("log")} className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition flex items-center gap-1.5 shadow-lg shadow-blue-600/20">
                 <PlusCircle className="w-4 h-4" /> Log New Mock
@@ -273,23 +283,23 @@ export default function OneFightMorePlatform() {
                 <span className="text-[10px] text-slate-500 mt-1 block">Net Score Average</span>
               </div>
               <div className="bg-[#0d1322] border border-slate-800/80 p-4 rounded-2xl">
-                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Last 3 Avg</span>
-                <p className="text-3xl font-black text-indigo-400 mt-1">{last3Avg}</p>
-                <span className="text-[10px] text-slate-500 mt-1 block">Recent Momentum</span>
+                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Wrong Logged</span>
+                <p className="text-3xl font-black text-rose-400 mt-1">{totalWrongLogged}</p>
+                <span className="text-[10px] text-slate-500 mt-1 block">Negative Marks</span>
               </div>
               <div className="bg-[#0d1322] border border-slate-800/80 p-4 rounded-2xl">
-                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Last 10 Avg</span>
-                <p className="text-3xl font-black text-purple-400 mt-1">{last10Avg}</p>
-                <span className="text-[10px] text-slate-500 mt-1 block">Stabilized Average</span>
+                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Skipped Logged</span>
+                <p className="text-3xl font-black text-amber-400 mt-1">{totalSkippedLogged}</p>
+                <span className="text-[10px] text-slate-500 mt-1 block">Unattempted Questions</span>
               </div>
               <div className="bg-[#0d1322] border border-slate-800/80 p-4 rounded-2xl">
                 <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Peak Score</span>
-                <p className="text-3xl font-black text-amber-400 mt-1">{bestScore}</p>
+                <p className="text-3xl font-black text-indigo-400 mt-1">{bestScore}</p>
                 <span className="text-[10px] text-slate-500 mt-1 block">Highest Achieved</span>
               </div>
             </div>
 
-            {/* VISUAL GRAPH 1: SCORE TREND AREA CHART (OFM STYLE) */}
+            {/* VISUAL GRAPH 1: SCORE TRAJECTORY */}
             <div className="bg-[#0d1322] border border-slate-800/80 rounded-2xl p-6 space-y-3">
               <div className="flex justify-between items-center">
                 <div>
@@ -310,14 +320,12 @@ export default function OneFightMorePlatform() {
               ) : (
                 <div className="w-full bg-[#080c14] border border-slate-800 rounded-xl p-4 overflow-hidden">
                   <svg viewBox={`0 0 ${chartSvgWidth} ${chartSvgHeight}`} className="w-full h-44 overflow-visible">
-                    {/* Benchmark reference grid */}
                     <line x1="0" y1={chartSvgHeight * 0.25} x2={chartSvgWidth} y2={chartSvgHeight * 0.25} stroke="#1e293b" strokeDasharray="4" />
                     <text x="5" y={chartSvgHeight * 0.25 - 4} fill="#64748b" fontSize="10">150 Target</text>
 
                     <line x1="0" y1={chartSvgHeight * 0.5} x2={chartSvgWidth} y2={chartSvgHeight * 0.5} stroke="#1e293b" strokeDasharray="4" />
                     <text x="5" y={chartSvgHeight * 0.5 - 4} fill="#64748b" fontSize="10">100 Benchmark</text>
 
-                    {/* Polyline Score Trajectory */}
                     {chartMocks.length > 1 && (
                       <polyline
                         fill="none"
@@ -329,7 +337,6 @@ export default function OneFightMorePlatform() {
                       />
                     )}
 
-                    {/* Plot Points */}
                     {chartMocks.map((m, idx) => {
                       const x = chartMocks.length === 1 ? chartSvgWidth / 2 : (idx / (chartMocks.length - 1)) * (chartSvgWidth - 40) + 20;
                       const y = chartSvgHeight - (Math.min(Math.max(Number(m.totalScore), 0), maxScoreScale) / maxScoreScale) * (chartSvgHeight - 30) - 15;
@@ -350,13 +357,11 @@ export default function OneFightMorePlatform() {
               )}
             </div>
 
-            {/* VISUAL GRAPH 2: MISTAKE BREAKDOWN & SUBJECT COMPARISON */}
+            {/* VISUAL GRAPH 2: WRONG VS SKIPPED REASON BREAKDOWN */}
             <div className="grid grid-cols-2 gap-4">
-              
-              {/* Mistake Categories Distribution */}
               <div className="bg-[#0d1322] border border-slate-800/80 rounded-2xl p-5 space-y-4">
                 <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                  <AlertOctagon className="w-4 h-4 text-rose-400" /> Mistake Category Distribution (Error Copy)
+                  <AlertOctagon className="w-4 h-4 text-rose-400" /> Negative Mark vs Skipped Reasons
                 </h3>
 
                 {errorQuestions.length === 0 ? (
@@ -365,9 +370,9 @@ export default function OneFightMorePlatform() {
                   <div className="space-y-3 pt-2">
                     {[
                       { label: "Silly Mistakes (Calculation/Reading)", count: sillyMistakesCount, color: "bg-rose-500", text: "text-rose-400" },
-                      { label: "Conceptual Gaps (Formula/Rules)", count: conceptGapsCount, color: "bg-amber-500", text: "text-amber-400" },
-                      { label: "Time Pressure Traps", count: timeTrapsCount, color: "bg-blue-500", text: "text-blue-400" },
-                      { label: "Guessed / Flukes", count: guessedCount, color: "bg-purple-500", text: "text-purple-400" },
+                      { label: "Conceptual Gaps (Formula/Rules)", count: conceptGapsCount, color: "bg-red-500", text: "text-red-400" },
+                      { label: "Skipped: Time Pressure / Ran Out of Time", count: timeTrapsCount, color: "bg-amber-500", text: "text-amber-400" },
+                      { label: "Skipped: Lengthy / Low Confidence", count: lengthySkippedCount, color: "bg-blue-500", text: "text-blue-400" },
                     ].map((item) => {
                       const pct = errorQuestions.length ? Math.round((item.count / errorQuestions.length) * 100) : 0;
                       return (
@@ -386,16 +391,16 @@ export default function OneFightMorePlatform() {
                 )}
               </div>
 
-              {/* Subject-Wise Exam Readiness Cards */}
+              {/* Subject-Wise Exam Readiness */}
               <div className="bg-[#0d1322] border border-slate-800/80 rounded-2xl p-5 space-y-3">
                 <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                  <Award className="w-4 h-4 text-emerald-400" /> Subject-Wise Exam Readiness
+                  <Award className="w-4 h-4 text-emerald-400" /> Subject Readiness & Accuracy
                 </h3>
                 <div className="grid grid-cols-2 gap-3 pt-1">
                   {[
-                    { name: "Reasoning", color: "from-blue-500 to-indigo-500", status: "Strong", ready: "86%" },
-                    { name: "General Awareness", color: "from-rose-500 to-amber-500", status: "Critical Area", ready: "52%" },
-                    { name: "Quantitative Aptitude", color: "from-emerald-500 to-teal-500", status: "Moderate", ready: "74%" },
+                    { name: "Reasoning", color: "from-blue-500 to-indigo-500", status: "High Accuracy", ready: "86%" },
+                    { name: "General Awareness", color: "from-rose-500 to-amber-500", status: "Bleeding Area", ready: "52%" },
+                    { name: "Quantitative Aptitude", color: "from-emerald-500 to-teal-500", status: "Needs Speed", ready: "74%" },
                     { name: "English Comprehension", color: "from-purple-500 to-pink-500", status: "Strong", ready: "88%" },
                   ].map((s) => (
                     <div key={s.name} className="bg-[#12192b] p-3 rounded-xl border border-slate-800">
@@ -411,7 +416,6 @@ export default function OneFightMorePlatform() {
                   ))}
                 </div>
               </div>
-
             </div>
 
             {/* Attempted Mocks Overview */}
@@ -422,7 +426,7 @@ export default function OneFightMorePlatform() {
               </div>
               {mocks.length === 0 ? (
                 <div className="text-center py-10 text-xs text-slate-500">
-                  Koi mock log nahi hua hai. "Log a Mock" tab par ja kar apna scorecard drag & drop karein.
+                  Koi mock log nahi hua hai. "Log Mock + Questions" tab par ja kar apna scorecard drag & drop karein.
                 </div>
               ) : (
                 <div className="divide-y divide-slate-800/60">
@@ -434,7 +438,9 @@ export default function OneFightMorePlatform() {
                       </div>
                       <div className="text-right">
                         <span className="text-lg font-black text-blue-400">{m.totalScore} Marks</span>
-                        <p className="text-[10px] text-rose-400 font-bold">{m.questionsCount} Mistakes Tagged</p>
+                        <p className="text-[10px] text-slate-400">
+                          <span className="text-rose-400 font-bold">{m.wrongCount || 0} Wrong</span> • <span className="text-amber-400 font-bold">{m.skippedCount || 0} Skipped</span>
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -444,15 +450,15 @@ export default function OneFightMorePlatform() {
           </div>
         )}
 
-        {/* 2. LOG A MOCK & ATTACH QUESTIONS (DUAL-TAB DRAG & DROP WORKFLOW) */}
+        {/* 2. LOG A MOCK & ATTACH (WRONG + SKIPPED QUESTIONS) */}
         {activeTab === "log" && (
           <div className="max-w-5xl space-y-6 pb-16">
             <div>
-              <h1 className="text-2xl font-black text-white tracking-tight">Log a Mock (One Fight More Method)</h1>
-              <p className="text-xs text-slate-400 mt-1">Dual-tab open karein: ek tab mein scorecard screenshot aur yahan drag & drop karein</p>
+              <h1 className="text-2xl font-black text-white tracking-tight">Log a Mock (Scorecard + Wrong & Skipped Questions)</h1>
+              <p className="text-xs text-slate-400 mt-1">Dual-tab open karein: scorecard aur galat/chode hue questions yahan drop karein</p>
             </div>
 
-            {/* Top Selector Grid */}
+            {/* Presets */}
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="text-xs font-semibold text-slate-400 block mb-1">Target Exam Preset</label>
@@ -555,42 +561,75 @@ export default function OneFightMorePlatform() {
               </div>
             </div>
 
-            {/* STEP 2: DIGITAL ERROR COPY - QUESTION ATTACHMENT */}
+            {/* STEP 2: DIGITAL ERROR & SKIP COPY ATTACHMENT */}
             <div className="bg-[#0d1322] border border-slate-800/80 rounded-2xl p-5 space-y-4">
               <div className="flex justify-between items-center">
                 <div>
-                  <h2 className="text-xs font-black text-rose-400 uppercase tracking-wider flex items-center gap-2">
-                    <span>Step 2:</span> Attach Wrong Questions (Digital Error Copy)
+                  <h2 className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                    <span>Step 2:</span> Attach Wrong & Skipped Questions
                   </h2>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Dual-tab se galat questions ka screenshot drop karein + kyu galat hua note karein</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Sawal ka screenshot drop karein aur galti ya chhodne ka karan note karein</p>
                 </div>
-                <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs px-2.5 py-0.5 rounded-full font-bold">
-                  {tempQuestions.length} Attached
-                </span>
+                <div className="flex gap-2">
+                  <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] px-2.5 py-0.5 rounded-full font-bold">
+                    {tempQuestions.filter(q => q.status === "WRONG").length} Wrong
+                  </span>
+                  <span className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] px-2.5 py-0.5 rounded-full font-bold">
+                    {tempQuestions.filter(q => q.status === "SKIPPED").length} Skipped
+                  </span>
+                </div>
+              </div>
+
+              {/* Status Switcher: Wrong vs Skipped */}
+              <div className="flex bg-[#080c14] p-1 rounded-xl border border-slate-800">
+                <button
+                  onClick={() => {
+                    setQStatus("WRONG");
+                    setQTag("Silly Error (Calculation)");
+                  }}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 ${
+                    qStatus === "WRONG" ? "bg-rose-600 text-white shadow" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <XCircle className="w-3.5 h-3.5" /> Wrong Question (Galat Hua)
+                </button>
+                <button
+                  onClick={() => {
+                    setQStatus("SKIPPED");
+                    setQTag("Time Pressure / Ran out of Time");
+                  }}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 ${
+                    qStatus === "SKIPPED" ? "bg-amber-600 text-white shadow" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <SkipForward className="w-3.5 h-3.5" /> Skipped / Left (Chhoda Gaya)
+                </button>
               </div>
 
               {/* Question Image Drop Box */}
               <div
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleQuestionDrop}
-                className="border-2 border-dashed border-slate-700 hover:border-rose-500 rounded-2xl p-4 text-center bg-[#080c14]/50 cursor-pointer transition"
+                className={`border-2 border-dashed rounded-2xl p-4 text-center bg-[#080c14]/50 cursor-pointer transition ${
+                  qStatus === "WRONG" ? "border-slate-700 hover:border-rose-500" : "border-slate-700 hover:border-amber-500"
+                }`}
               >
                 {qImage ? (
                   <div className="space-y-1">
                     <img src={qImage} alt="Question" className="max-h-40 mx-auto rounded-lg border border-slate-700" />
-                    <button onClick={() => setQImage(null)} className="text-[10px] text-rose-400 hover:underline">Remove Image</button>
+                    <button onClick={() => setQImage(null)} className="text-[10px] text-rose-400 hover:underline">Remove Screenshot</button>
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    <ImageIcon className="w-6 h-6 text-rose-400 mx-auto" />
+                    <ImageIcon className={`w-6 h-6 mx-auto ${qStatus === "WRONG" ? "text-rose-400" : "text-amber-400"}`} />
                     <p className="text-xs font-bold text-white">Drag & Drop Question Screenshot Here</p>
-                    <p className="text-[10px] text-slate-500">Test analysis window se direct snapshot drop karein</p>
+                    <p className="text-[10px] text-slate-500">Test analysis window se is sawal ka snapshot drop karein</p>
                     <input type="file" accept="image/*" onChange={handleQuestionDrop} className="text-xs text-slate-400 mt-1" />
                   </div>
                 )}
               </div>
 
-              {/* Question Metadata */}
+              {/* Question Metadata Inputs */}
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="text-xs text-slate-400 block mb-1">Subject</label>
@@ -605,46 +644,67 @@ export default function OneFightMorePlatform() {
                   <label className="text-xs text-slate-400 block mb-1">Topic / Chapter</label>
                   <input
                     type="text"
-                    placeholder="e.g. Geometry / Syllogisms"
+                    placeholder="e.g. Mensuration / Seating Arrangement"
                     value={qTopic}
                     onChange={(e) => setQTopic(e.target.value)}
                     className="w-full bg-[#080c14] border border-slate-700 rounded-xl p-2 text-xs text-white"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 block mb-1">Mistake Category</label>
-                  <select value={qTag} onChange={(e) => setQTag(e.target.value)} className="w-full bg-[#080c14] border border-slate-700 rounded-xl p-2 text-xs text-white">
-                    <option>Silly Error (Calculation)</option>
-                    <option>Conceptual Gap</option>
-                    <option>Time Trap</option>
-                    <option>Guessed / Fluke</option>
-                  </select>
+                  <label className="text-xs text-slate-400 block mb-1">
+                    {qStatus === "WRONG" ? "Mistake Classifier" : "Skipped Reason"}
+                  </label>
+                  {qStatus === "WRONG" ? (
+                    <select value={qTag} onChange={(e) => setQTag(e.target.value)} className="w-full bg-[#080c14] border border-slate-700 rounded-xl p-2 text-xs text-white">
+                      <option>Silly Error (Calculation)</option>
+                      <option>Conceptual Gap (Rule bhool gaya)</option>
+                      <option>Question Not Read Carefully</option>
+                      <option>Guessed / Fluke Negative</option>
+                    </select>
+                  ) : (
+                    <select value={qTag} onChange={(e) => setQTag(e.target.value)} className="w-full bg-[#080c14] border border-slate-700 rounded-xl p-2 text-xs text-white">
+                      <option>Time Pressure / Ran out of Time</option>
+                      <option>Too Lengthy / Heavy Calculation</option>
+                      <option>Chapter Not Covered / Unknown</option>
+                      <option>Low Confidence (Avoided Negative)</option>
+                    </select>
+                  )}
                 </div>
               </div>
 
-              {/* Mistake Reason & What was Learned */}
+              {/* Dynamic Prompts based on Wrong or Skipped */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-rose-400 font-semibold block mb-1 flex items-center gap-1">
-                    <HelpCircle className="w-3.5 h-3.5" /> Yeh Sawal Kyu Galat Hua? (Reason)
+                  <label className={`text-xs font-semibold block mb-1 flex items-center gap-1 ${qStatus === "WRONG" ? "text-rose-400" : "text-amber-400"}`}>
+                    <HelpCircle className="w-3.5 h-3.5" /> 
+                    {qStatus === "WRONG" ? "Yeh Sawal Kyu Galat Hua? (Reason)" : "Yeh Sawal Kyu Chhoda? (Why Skipped?)"}
                   </label>
                   <textarea
                     rows={2}
-                    value={qWhyWrong}
-                    onChange={(e) => setQWhyWrong(e.target.value)}
-                    placeholder="e.g., Calculation mein + ki jagah - kar diya..."
-                    className="w-full bg-[#080c14] border border-slate-700 rounded-xl p-2 text-xs text-white focus:border-rose-500 focus:outline-none"
+                    value={qWhyReason}
+                    onChange={(e) => setQWhyReason(e.target.value)}
+                    placeholder={
+                      qStatus === "WRONG"
+                        ? "e.g., Calculation mein + ki jagah - kar diya ya option galat mark kiya..."
+                        : "e.g., 3 minute bache the aur maths ke 5 questions the, isiliye skip kiya..."
+                    }
+                    className="w-full bg-[#080c14] border border-slate-700 rounded-xl p-2 text-xs text-white focus:border-blue-500 focus:outline-none"
                   />
                 </div>
                 <div>
                   <label className="text-xs text-emerald-400 font-semibold block mb-1 flex items-center gap-1">
-                    <Lightbulb className="w-3.5 h-3.5" /> Isse Kya Seekha? (Key Formula / Concept Rule)
+                    <Lightbulb className="w-3.5 h-3.5" /> 
+                    {qStatus === "WRONG" ? "Isse Kya Seekha? (Formula / Rule)" : "Agli Baar Ka Action Plan (How to tackle?)"}
                   </label>
                   <textarea
                     rows={2}
                     value={qLearnedNote}
                     onChange={(e) => setQLearnedNote(e.target.value)}
-                    placeholder="e.g., Formula: (a+b+c)^2 = a^2 + b^2 + c^2 + 2(ab+bc+ca)..."
+                    placeholder={
+                      qStatus === "WRONG"
+                        ? "e.g., Formula: R = (a*b)/(a+b). Final value double-check karna hai."
+                        : "e.g., Is type ke question mein digit sum trick lagani hai taaki 30 sec mein ho jaye."
+                    }
                     className="w-full bg-[#080c14] border border-slate-700 rounded-xl p-2 text-xs text-white focus:border-emerald-500 focus:outline-none"
                   />
                 </div>
@@ -654,7 +714,7 @@ export default function OneFightMorePlatform() {
                 onClick={addQuestion}
                 className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-2 rounded-xl text-xs transition border border-slate-700"
               >
-                + Attach Question to This Mock
+                + Attach {qStatus === "WRONG" ? "Wrong Question" : "Skipped Question"} to Mock
               </button>
 
               {/* Currently Attached List */}
@@ -666,10 +726,14 @@ export default function OneFightMorePlatform() {
                       <div key={q.id} className="bg-[#080c14] p-3 rounded-xl border border-slate-800 space-y-1.5 text-xs">
                         <div className="flex justify-between items-start">
                           <span className="font-bold text-white uppercase">#{idx + 1} [{q.subject}] {q.topic}</span>
-                          <span className="bg-rose-500/10 text-rose-400 text-[10px] px-2 py-0.5 rounded font-bold">{q.tag}</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
+                            q.status === "WRONG" ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                          }`}>
+                            {q.status}: {q.tag}
+                          </span>
                         </div>
-                        <p className="text-slate-300 text-[11px]"><strong>Galti:</strong> {q.whyWrong}</p>
-                        <p className="text-emerald-400 text-[11px]"><strong>Seekh:</strong> {q.learnedNote}</p>
+                        <p className="text-slate-300 text-[11px]"><strong>Karan:</strong> {q.whyReason}</p>
+                        <p className="text-emerald-400 text-[11px]"><strong>Seekh/Plan:</strong> {q.learnedNote}</p>
                       </div>
                     ))}
                   </div>
@@ -687,13 +751,13 @@ export default function OneFightMorePlatform() {
           </div>
         )}
 
-        {/* 3. DIGITAL ERROR COPY */}
+        {/* 3. DIGITAL ERROR & SKIPPED COPY */}
         {activeTab === "errors" && (
           <div className="max-w-6xl space-y-6">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-2xl font-black text-white tracking-tight">Digital Error Copy</h1>
-                <p className="text-xs text-slate-400 mt-0.5">Question screenshots, mistake classifications & learning notes</p>
+                <h1 className="text-2xl font-black text-white tracking-tight">Digital Error & Skipped Questions Notebook</h1>
+                <p className="text-xs text-slate-400 mt-0.5">Filter by Wrong answers or Skipped/Unattempted traps</p>
               </div>
               <button onClick={() => setActiveTab("retest")} className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition">
                 Start Retest Drill
@@ -702,23 +766,31 @@ export default function OneFightMorePlatform() {
 
             {/* Filter Tabs */}
             <div className="flex gap-2 text-xs overflow-x-auto pb-1">
-              {["ALL", "maths", "reasoning", "gs", "english", "Silly Error (Calculation)", "Conceptual Gap", "Time Trap"].map((flt) => (
+              {[
+                { id: "ALL", label: "All Items" },
+                { id: "WRONG", label: "Only Wrong Questions" },
+                { id: "SKIPPED", label: "Only Skipped Questions" },
+                { id: "maths", label: "Maths" },
+                { id: "reasoning", label: "Reasoning" },
+                { id: "gs", label: "GS" },
+                { id: "english", label: "English" },
+              ].map((flt) => (
                 <button
-                  key={flt}
-                  onClick={() => setSelectedErrorFilter(flt)}
-                  className={`px-3 py-1.5 rounded-lg font-bold capitalize transition ${
-                    selectedErrorFilter === flt ? "bg-blue-600 text-white" : "bg-[#0d1322] text-slate-400 hover:text-white"
+                  key={flt.id}
+                  onClick={() => setSelectedErrorFilter(flt.id)}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition ${
+                    selectedErrorFilter === flt.id ? "bg-blue-600 text-white" : "bg-[#0d1322] text-slate-400 hover:text-white"
                   }`}
                 >
-                  {flt}
+                  {flt.label}
                 </button>
               ))}
             </div>
 
-            {/* Error Cards */}
+            {/* Cards Grid */}
             {filteredErrors.length === 0 ? (
               <div className="bg-[#0d1322] border border-slate-800 rounded-2xl p-12 text-center text-slate-500 text-xs">
-                Koi questions match nahi hue. "Log a Mock" tab se apne galat questions attach karein.
+                Koi questions match nahi hue. "Log Mock" tab se questions add karein.
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-4">
@@ -729,8 +801,10 @@ export default function OneFightMorePlatform() {
                         <span className="font-black text-sm text-white uppercase">[{q.subject}] {q.topic}</span>
                         <p className="text-[10px] text-slate-500">{q.mockName} • {q.date}</p>
                       </div>
-                      <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2.5 py-0.5 rounded-md text-[10px] font-bold">
-                        {q.tag}
+                      <span className={`border px-2.5 py-0.5 rounded-md text-[10px] font-bold ${
+                        q.status === "WRONG" ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                      }`}>
+                        {q.status}: {q.tag}
                       </span>
                     </div>
 
@@ -741,11 +815,13 @@ export default function OneFightMorePlatform() {
                     )}
 
                     <div className="space-y-1.5 text-xs bg-[#080c14] p-3 rounded-xl border border-slate-800/80">
-                      <p className="text-rose-400">
-                        <strong>Kyu Galat Hua:</strong> <span className="text-slate-300">{q.whyWrong}</span>
+                      <p className={q.status === "WRONG" ? "text-rose-400" : "text-amber-400"}>
+                        <strong>{q.status === "WRONG" ? "Galti Ki Wajah:" : "Chhodne Ki Wajah:"}</strong>{" "}
+                        <span className="text-slate-300">{q.whyReason}</span>
                       </p>
                       <p className="text-emerald-400">
-                        <strong>Seekh / Formula:</strong> <span className="text-slate-300">{q.learnedNote}</span>
+                        <strong>{q.status === "WRONG" ? "Seekh / Formula:" : "Agli Baar Ka Plan:"}</strong>{" "}
+                        <span className="text-slate-300">{q.learnedNote}</span>
                       </p>
                     </div>
                   </div>
@@ -755,20 +831,22 @@ export default function OneFightMorePlatform() {
           </div>
         )}
 
-        {/* 4. TARGETED RETEST ENGINE */}
+        {/* 4. TARGETED RETEST DRILL */}
         {activeTab === "retest" && (
           <div className="max-w-3xl mx-auto space-y-6">
-            <h1 className="text-2xl font-black text-white tracking-tight">Targeted Retest Drill</h1>
+            <h1 className="text-2xl font-black text-white tracking-tight">Retest Drill Session</h1>
             {errorQuestions.length === 0 ? (
               <div className="bg-[#0d1322] border border-slate-800 rounded-2xl p-12 text-center text-slate-500 text-xs">
-                Retest ke liye koi questions nahi hain. Pehle mock mein galat questions attach karein.
+                Retest ke liye koi questions nahi hain. Pehle mock mein questions attach karein.
               </div>
             ) : (
               <div className="bg-[#0d1322] border border-slate-800 rounded-2xl p-6 space-y-4">
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-bold text-slate-400">Question {retestIndex + 1} of {errorQuestions.length}</span>
-                  <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2.5 py-0.5 rounded-md font-bold uppercase">
-                    {errorQuestions[retestIndex].subject}
+                  <span className={`border px-2.5 py-0.5 rounded-md font-bold uppercase ${
+                    errorQuestions[retestIndex].status === "WRONG" ? "bg-rose-500/10 text-rose-400 border-rose-500/20" : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                  }`}>
+                    {errorQuestions[retestIndex].status} • {errorQuestions[retestIndex].subject}
                   </span>
                 </div>
 
@@ -784,13 +862,19 @@ export default function OneFightMorePlatform() {
                   onClick={() => setShowRetestDetails(!showRetestDetails)}
                   className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-2 rounded-xl text-xs transition"
                 >
-                  {showRetestDetails ? "Hide Mistake & Formula" : "Reveal Why it Failed & Formula"}
+                  {showRetestDetails ? "Hide Analysis & Solution" : "Reveal Reason & Formula/Plan"}
                 </button>
 
                 {showRetestDetails && (
                   <div className="bg-[#080c14] p-4 rounded-xl border border-slate-800 space-y-2 text-xs">
-                    <p className="text-rose-400"><strong>Original Mistake:</strong> {errorQuestions[retestIndex].whyWrong}</p>
-                    <p className="text-emerald-400"><strong>Concept / Formula:</strong> {errorQuestions[retestIndex].learnedNote}</p>
+                    <p className={errorQuestions[retestIndex].status === "WRONG" ? "text-rose-400" : "text-amber-400"}>
+                      <strong>{errorQuestions[retestIndex].status === "WRONG" ? "Original Galti:" : "Kyu Chhoda Tha:"}</strong>{" "}
+                      {errorQuestions[retestIndex].whyReason}
+                    </p>
+                    <p className="text-emerald-400">
+                      <strong>{errorQuestions[retestIndex].status === "WRONG" ? "Formula/Seekh:" : "Next Plan:"}</strong>{" "}
+                      {errorQuestions[retestIndex].learnedNote}
+                    </p>
                   </div>
                 )}
 
@@ -827,7 +911,9 @@ export default function OneFightMorePlatform() {
                 </div>
                 <div className="text-right">
                   <span className="text-2xl font-black text-blue-400">{m.totalScore}</span>
-                  <span className="text-xs text-slate-500 block">{m.questionsCount} mistakes logged</span>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    <span className="text-rose-400 font-semibold">{m.wrongCount || 0} Wrong</span> | <span className="text-amber-400 font-semibold">{m.skippedCount || 0} Skipped</span>
+                  </p>
                 </div>
               </div>
             ))}
