@@ -7,17 +7,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "GEMINI_API_KEY missing in Vercel settings" }, { status: 500 });
     }
 
-    const { imageBase64, examPreset, mockType, platform } = await req.json();
+    const { imageBase64, examPreset, mockType } = await req.json();
     if (!imageBase64) {
       return NextResponse.json({ error: "Scorecard image missing" }, { status: 400 });
     }
 
     const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, "");
 
-    const promptText = `Extract marks, correct, wrong, unattempted for reasoning, gs, maths, english from this scorecard.
-Return ONLY valid JSON:
+    const promptText = `Extract marks, correct, wrong, and unattempted counts for reasoning, gs, maths, english from this scorecard image.
+Return ONLY valid JSON matching this structure:
 {
-  "mockName": "${examPreset} ${mockType}",
+  "mockName": "${examPreset || "Mock Test"} ${mockType || "Full Mock"}",
   "sections": {
     "reasoning": { "correct": 0, "wrong": 0, "unattempted": 0, "marks": 0 },
     "gs": { "correct": 0, "wrong": 0, "unattempted": 0, "marks": 0 },
@@ -26,26 +26,29 @@ Return ONLY valid JSON:
   }
 }`;
 
-    // Target the supported model directly
-    const apiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: promptText },
-              {
-                inlineData: {
-                  mimeType: "image/jpeg",
-                  data: cleanBase64
-                }
-              }
-            ]
-          }
-        ]
-      })
-    });
+    // Directly calling the required gemini-3.6-flash endpoint
+    const apiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: promptText },
+                {
+                  inlineData: {
+                    mimeType: "image/jpeg",
+                    data: cleanBase64,
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      }
+    );
 
     const resJson = await apiRes.json();
     if (!apiRes.ok || resJson.error) {
